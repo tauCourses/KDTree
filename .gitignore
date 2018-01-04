@@ -30,3 +30,13 @@
 *.exe
 *.out
 *.app
+
+# Libraries
+boost/*
+CGAL/*
+
+# Clion
+.idea/*
+
+# CMake
+cmake-build-debug/*
