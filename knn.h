@@ -14,10 +14,13 @@ public:
     // iterator to the input points
     template<typename InputIterator>
     Knn(size_t d, InputIterator beginPoints, InputIterator endPoints) {
-        for (int i = 1; beginPoints != endPoints; ++beginPoints, ++i)
-            points.push_back(make_tuple(beginPoints, i, false));
+      /*  for (int i = 1; beginPoints != endPoints; ++beginPoints, ++i)
+            this->points.push_back(make_tuple(beginPoints, i, false));
         auto points_index_by_axis = sort_by_each_axis(d);
-        root = unique_ptr(new KnnNode(points, points_index_by_axis, points_index_by_axis[0], points.size(), 0, d));
+        this->root = unique_ptr(new KnnNode(points, points_index_by_axis, points_index_by_axis[0], points.size(), 0, d));
+        for(int i = 0; i<d; ++i)
+            delete[] points_index_by_axis[i];
+        delete[] points_index_by_axis;*/
     }
 
 
@@ -25,25 +28,20 @@ public:
     //output:  a vector of the indexes of the k-nearest-neighbors points todo : indexes or point_d??
     template<typename OutputIterator>
     OutputIterator find_points(size_t k, const Point_d &it, OutputIterator oi) {
-        KNearestPointRepository knnRepository(points, *root, it, k);
-        for (int point_index: knnRepository.get_results()) {
-            //if need to return pointers:
-            oi++ = point_index; // todo check if indexes are 0 based
-            //else
-            oi++ = points[point_index];
-        }
+      /*  KNearestPointRepository knnRepository(points, *root, it, k);
+        int i = 0;
+        for (int point_index: knnRepository.get_results())
+            oi[i++] = points[point_index];*/
         return oi;
     }
 
 private:
-    vector<Point_d> points;
-    unique_ptr<KnnNode> root;
-
-    int **sort_by_each_axis(size_t d) {
+  /*  int **sort_by_each_axis(size_t d) {
         int **res = new int *[d];
         for (int i = 0; i < d; ++i) {
             res[i] = new int[points.size()];
-            for (int j = 0; j < points.size(); ++j) res[i][j] = j;
+            for (int j = 0; j < points.size(); ++j)
+                res[i][j] = j;
             sort(res[i], res[i] + points.size(), [](const int &a, const int &b) -> bool {
                 return points[a][i] < points[b][i];
             });
@@ -52,32 +50,62 @@ private:
     }
 
     class KNearestPointRepository {
+        class CompareDistLess{
+            bool operator()(pair<int,typename Kernel::FT> &a, pair<Point_d,typename Kernel::FT> &b){
+                return a.second<b.second;
+            }
+        };
+        class CompareDistGreater{
+            bool operator()(pair<Knn<Kernel>::KnnNode & ,typename  Kernel::FT> &a, pair<Knn<Kernel>::KnnNode &,typename  Kernel::FT> &b){
+                return a.second>b.second;
+            }
+        };
+
+        Kernel::FT squared_dist_d(Point_d p, Point_d q, size_t d)
+        {
+            Kernel::FT res = 0;
+            for (size_t i=0; i < d ;++i)
+                res += (p[i] - q[i]) * (p[i] - q[i]);
+
+            return res;
+        }
+
         // todo use another type maybe that can be iterated without pop... cost a lot.
-        typedef priority_queue<int, vector<int>, function<bool(int, int)>> points_priority_queue;
-        typedef priority_queue<Knn<Kernel>::KnnNode &, vector<Knn<Kernel>::KnnNode &>, std::function<bool(
-                Knn<Kernel>::KnnNode &, Knn<Kernel>::KnnNode &)>> nodes_priority_queue;
+        typedef priority_queue<pair<int,Kerenel::FT>, vector<pair<int,Kerenel::FT>>, CompareDistLess> points_priority_queue_t;
+        typedef priority_queue<pair<KnnNode &, Kerene::FT>, vector<pair<KnnNode &, Kerene::FT>>, CompareDistGreater> nodes_priority_queue_t;
     public :
         KNearestPointRepository(vector<Point_d> &points, KnnNode &root, Point_d &current_query_point,
                                 size_t k) : points(points), current_query_point(current_query_point),
                                             k(k) {
-            points_priority_queue knnPointQueue(compare_points);
-            nodes_priority_queue knnNodeQueue(compare_nodes);
+            points_priority_queue_t knnPointQueue(compare_points);
+            nodes_priority_queue_t knnNodeQueue(compare_nodes);
             knnNodeQueue.push(root);
             while (knnNodeQueue.size()) {
-                KnnNode &currentNode = knnNodeQueue.top();
+                pair<KnnNode, Kernel::FT> currentNode = knnNodeQueue.top();
                 knnNodeQueue.pop();
-                if (currentNode.size() <= k - knnPointQueue.size() ||
-                    currentNode.size() <= MAX_NUMBER_OF_POINTS_IN_NODE) {
-                    for (int point : currentNode.get_points())
-                        knnPointQueue.push(point);
+                if (currentNode.first.size() <= k - knnPointQueue.size() ||
+                    currentNode.first().size() <= MAX_NUMBER_OF_POINTS_IN_NODE) {
+                    for (int point : currentNode.first.get_points()) {
+                        Kernel::FT distance = squared_dist_d(points[point], current_query_point);
+                        if (knnPointQueue.size() < k)
+                            knnPointQueue.push(make_pair(point, distance));
+                        else if (knnPointQueue.top().second > distance) {// the points is closer then the father one
+                            knnPointQueue.push(make_pair(point,distance));
+                            knnPointQueue.pop();
+                        }
+                    }
                 } else {
-                    //queue is full.
-                    Point_d closestPoint = currentNode.get_closest_point_possible(current_query_point);
-                    if (0) { // if the distance to the most fat away point is smaller then no need to continue;
+                    // queue is full.
+                    if (currentNode.second > knnPointQueue.top().second) {
+                        // if the distance to the most fat away point is smaller then no need to continue;
                         break;
                     } else {
-                        nodes_priority_queue.push(currentNode.get_left());
-                        nodes_priority_queue.push(currentNode.get_right());
+                        closestPoint = currentNode.get_left().get_closest_point_possible(current_query_point);
+                        distance = squared_dist_d(closestPoint, current_query_point);
+                        nodes_priority_queue.push(make_pair(currentNode.get_left(), distance));
+                        closestPoint = currentNode.get_right().get_closest_point_possible(current_query_point);
+                        distance = squared_dist_d(closestPoint, current_query_point);
+                        nodes_priority_queue.push(make_pair(currentNode.get_right(), distance));
                     }
                 }
             }
@@ -94,18 +122,6 @@ private:
         const Point_d &current_query_point;
         size_t k;
         vector<int> result;
-
-        bool compare_points(const int lhs_point_index, const int rhs__point_index) const {
-            // todo now return which of the points is the closest one to current_query_point.
-            return 0;
-        }
-
-        bool compare_nodes(const KnnNode &lhs, const KnnNode &rhs) const {
-            Point_d closest_point_in_lhs = lhs.get_closest_point_possible(current_query_point);
-            Point_d closest_point_in_rhs = rhs.get_closest_point_possible(current_query_point);
-            // todo now return which of the points is the MOST FAR AWAY one to current_query_point.
-            return 0;
-        }
     };
 
     class KnnNode {
@@ -113,33 +129,30 @@ private:
         KnnNode(vector<Point_d> &points, int **points_indexes_sorted_by_axis, const int *points_indexes,
                 size_t number_of_points, size_t index_to_sort_by,
                 size_t d) : points(points), d(d) {
-            if (number_of_points == 0) return; // is empty.
+            if (number_of_points == 0)
+                return; // is empty.
             for (int i = 0; i < number_of_points; ++i)
                 this->points_indexes.push_back(points_indexes[i]);
             update_min_max(points_indexes_sorted_by_axis, number_of_points);
-            if (number_of_points <= MAX_NUMBER_OF_POINTS_IN_NODE) return; // no need to split.
+            if (number_of_points <= MAX_NUMBER_OF_POINTS_IN_NODE)
+                return; // no need to split.
             size_t m = number_of_points / 2;
 
             int **left_points_indexes_ordered_by_axis, **right_points_indexes_ordered_by_axis;
 
-            create_splitted_sorted_by_axis_array(points_indexes_sorted_by_axis, &left_points_indexes_ordered_by_axis,
+            this->create_splitted_sorted_by_axis_array(points_indexes_sorted_by_axis, &left_points_indexes_ordered_by_axis,
                                                  &right_points_indexes_ordered_by_axis, number_of_points,
                                                  index_to_sort_by);
 
-            left = new KnnNode(points, left_points_indexes_ordered_by_axis,
-                               points_indexes_sorted_by_axis[index_to_sort_by], m, (index_to_sort_by + 1) % d, d);
-            right = new KnnNode(points, right_points_indexes_ordered_by_axis,
+            this->left =unique_ptr( new KnnNode(points, left_points_indexes_ordered_by_axis,
+                               points_indexes_sorted_by_axis[index_to_sort_by], m, (index_to_sort_by + 1) % d, d));
+            this->right = unique_ptr(new KnnNode(points, right_points_indexes_ordered_by_axis,
                                 points_indexes_sorted_by_axis[index_to_sort_by] + m, number_of_points - m,
-                                (index_to_sort_by + 1) % d, d);
+                                (index_to_sort_by + 1) % d, d));
 
             for (int i = 0; i < d; i++)
                 delete[] left_points_indexes_ordered_by_axis[i], delete[] right_points_indexes_ordered_by_axis[i];
             delete[] left_points_indexes_ordered_by_axis, delete[] right_points_indexes_ordered_by_axis;
-        }
-
-        ~KnnNode() {
-            delete left;
-            delete right;
         }
 
         // todo make this faster by caching the last result.
@@ -179,7 +192,7 @@ private:
         size_t d;
         Point_d min_point;
         Point_d max_point;
-        KnnNode *left = nullptr, *right = nullptr;
+        unique_ptr<KnnNode> left, right;
 
         void update_min_max(int **points_indexes_ordered_by_axis, size_t number_of_points) {
             for (size_t i = 0; i < d; i++) {
@@ -192,7 +205,8 @@ private:
                                                   size_t index_to_sort_by) {
             size_t m = n / 2;
             set<int> leftIndexesSet;
-            for (int i = 0; i < m; ++i) leftIndexesSet.insert(origin[index_to_sort_by][i]);
+            for (int i = 0; i < m; ++i)
+                leftIndexesSet.insert(origin[index_to_sort_by][i]);
             (*pleft) = new int *[d], (*pright) = new int *[d];
             for (int i = 0; i < d; ++i) {
                 (*pleft)[i] = new int[m], (*pright)[i] = new int[n - m];
@@ -206,4 +220,7 @@ private:
             }
         }
     };
+
+    vector<Point_d> points;
+    unique_ptr<KnnNode> root;*/
 };

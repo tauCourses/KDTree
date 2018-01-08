@@ -27,7 +27,7 @@ Point_d read_point(size_t d, std::ifstream& is)
 	is >> c;
 	point_to_be.push_back(c);
   }
-  Point_d point(d,point_to_be.begin(),point_to_be.end());
+  Point_d point(static_cast<int>(d), point_to_be.begin(), point_to_be.end());
   return point;
 }
 
@@ -35,9 +35,8 @@ Kernel::FT squared_dist_d(Point_d p, Point_d q, size_t d)
 {
     Kernel::FT res = 0;
     for (size_t i=0; i < d ;++i)
-    {
-	res += (p[i] - q[i]) * (p[i] - q[i]);
-    }
+	    res += (p[i] - q[i]) * (p[i] - q[i]);
+
     return res;
 }
 
