@@ -2,7 +2,6 @@
 #include <queue>
 
 #include "knnNode.h"
-#define MAX_NUMBER_OF_POINTS_IN_NODE 3
 
 using namespace std;
 
@@ -43,14 +42,7 @@ private:
             for (int j = 0; j < points.size(); ++j)
                 this->sorted_indexes[i][j] = &this->points[j];
             sort(this->sorted_indexes[i].begin(), this->sorted_indexes[i].end(),
-                 [&](const Point_d *a, const Point_d *b) -> bool { return (*a)[i] < (*b)[i]; });
-/*        for (int i = 0; i < this->dimension; ++i) { TODO->remove, just print
-            cout << "for index " << i << ":" << endl;
-            for (int j = 0; j < points.size(); ++j)
-                cout << get<0>(this->sortedIndexes[i][j]) << endl;
-            cout << endl;
-
-        }*/
+                 [&i](const Point_d *a, const Point_d *b) -> bool { return (*a)[i] < (*b)[i]; });
         }
     }
 

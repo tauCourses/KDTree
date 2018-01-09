@@ -6,7 +6,7 @@
 
 using namespace std;
 
-#define MIN_NODE_SIZE 3
+#define MAX_NODE_SIZE 3
 template<typename Kernel>
 class KnnNode {
 public:
@@ -16,11 +16,11 @@ public:
     explicit KnnNode(vector<vector<Point_d*>>& sorted_indexes, int currentInx, size_t d) :
             sortedIndexes(sorted_indexes), currentInx(currentInx), dimension(d), numberOfPoints(sorted_indexes[0].size())
     {
-        if(this->numberOfPoints <= MIN_NODE_SIZE)
+        if(this->numberOfPoints <= MAX_NODE_SIZE)
         {
             this->atomic = true;
         } else{
-            this->initLeftAndRightNodes();
+            this->initLeftAndRightSortedIndexes();
             this->left = unique_ptr<KnnNode<Kernel>>(new KnnNode<Kernel>(leftSortedIndexes,
                                                                          static_cast<int>((currentInx + 1) % d),
                                                                          this->dimension));
@@ -122,7 +122,7 @@ private:
             }
         }
     }
-    void initLeftAndRightNodes()
+    void initLeftAndRightSortedIndexes()
     {
         int medianIndex = this->numberOfPoints / 2;
         set<Point_d*> leftPart;
